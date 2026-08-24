@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS temperature_cells (
     celsius_scale  INTEGER NOT NULL,
     window_seq     INTEGER NOT NULL DEFAULT 0,
     covered        INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (recorder_id, at_seconds)
+    PRIMARY KEY (task_id, recorder_id, at_seconds)
 );
 
 CREATE TABLE IF NOT EXISTS evidence_records (
