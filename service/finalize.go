@@ -41,6 +41,13 @@ func (s *Service) Finalize(ctx context.Context, id inspection.TaskID, req Finali
 		if fault != nil {
 			return fault
 		}
+		// Every finalization, including FinalEntered on an already-terminal
+		// task, is bound to the current generation; a stale-generation request
+		// from an old page (e.g. after a rejudgement bumped the generation)
+		// must never reach the terminal outcome.
+		if f := guardGeneration(task, req.Generation); f != nil {
+			return f
+		}
 		// Entered: only from admissible (already terminal).
 		if req.Outcome == inspection.FinalEntered {
 			if task.Status != inspection.StatusAdmissible {

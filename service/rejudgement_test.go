@@ -41,6 +41,20 @@ func TestRejudgementSinglePerGeneration(t *testing.T) {
 	if snap.Task.Generation != 2 {
 		t.Fatalf("task generation = %d, want 2", snap.Task.Generation)
 	}
+
+	// A finalize submitted at the OLD (pre-rejudgement) generation must be
+	// rejected as stale, never allowed to race the refreshed generation into
+	// a terminal outcome.
+	_, fault = svc.Finalize(context.Background(), id, FinalizeRequest{
+		OperationID: "op-final-stale", Generation: 1, Outcome: inspection.FinalCancelled,
+	})
+	if fault == nil || fault.Code != CodeStaleGeneration {
+		t.Fatalf("fault = %v, want stale_generation for stale finalize", fault)
+	}
+	snap, _ = svc.GetSnapshot(context.Background(), id)
+	if snap.Task.Status.IsTerminal() {
+		t.Fatalf("status = %s, stale finalize must not terminalize", snap.Task.Status)
+	}
 }
 
 // TestContaminationForcesQuarantine asserts a contamination rejudgement blocks
