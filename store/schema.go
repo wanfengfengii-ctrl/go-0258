@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS rejudgements (
     blind_codes  TEXT NOT NULL,
     compartments TEXT NOT NULL,
     wells        TEXT NOT NULL,
-    PRIMARY KEY (task_id, reason)
+    PRIMARY KEY (task_id, generation)
 );
 
 CREATE TABLE IF NOT EXISTS reviews (
