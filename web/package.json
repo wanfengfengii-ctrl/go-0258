@@ -1,0 +1,10 @@
+{
+  "name": "dairygate-console",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DairyGate 生鲜乳罐批入厂前联合检验浏览器检验控制台",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}
