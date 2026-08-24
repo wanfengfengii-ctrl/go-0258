@@ -46,10 +46,11 @@ func (s *sqliteTx) PutEvidence(ctx context.Context, r evidence.EvidenceRecord) e
 }
 
 // ListEvidence returns all evidence for a task, ordered by generation then
-// type.
+// type. It is scoped to the task: a reading phase must not be advanced by
+// evidence written for another task.
 func (s *sqliteTx) ListEvidence(ctx context.Context, taskID inspection.TaskID) ([]evidence.EvidenceRecord, error) {
 	rows, err := s.tx.QueryContext(ctx,
-		`SELECT `+evidenceColumns+` FROM evidence_records ORDER BY generation, evidence_type, blind_code, compartment, well`)
+		`SELECT `+evidenceColumns+` FROM evidence_records WHERE task_id=? ORDER BY generation, evidence_type, blind_code, compartment, well`, taskID)
 	if err != nil {
 		return nil, err
 	}
