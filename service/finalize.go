@@ -84,13 +84,15 @@ func (s *Service) Finalize(ctx context.Context, id inspection.TaskID, req Finali
 		}
 		conclusion := arbiter.Evaluate(input)
 
-		switch req.Outcome {
-		case inspection.FinalAdmissible:
+		// Admissible must be backed by the arbiter's automatic conclusion:
+		// every measurement gate and two distinct qualified reviewers must
+		// pass. Quarantined and cancelled are manual overrides and may be
+		// forced from pending_review regardless of the automatic conclusion,
+		// so they do not gate on the arbiter here. The compare-and-set
+		// terminal transition in commitFinal still ensures only one
+		// competitor wins.
+		if req.Outcome == inspection.FinalAdmissible {
 			if conclusion.FinalType != "admissible" {
-				return NewFault(CodeFinalizeConflict, conclusion.Reasons...)
-			}
-		case inspection.FinalQuarantined, inspection.FinalCancelled:
-			if conclusion.FinalType != string(req.Outcome) {
 				return NewFault(CodeFinalizeConflict, conclusion.Reasons...)
 			}
 		}
