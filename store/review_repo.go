@@ -94,7 +94,7 @@ func (s *sqliteTx) PutReview(ctx context.Context, r arbiter.Review) error {
 // ListReviews returns all reviews for a task ordered by reviewer.
 func (s *sqliteTx) ListReviews(ctx context.Context, taskID inspection.TaskID) ([]arbiter.Review, error) {
 	rows, err := s.tx.QueryContext(ctx,
-		`SELECT task_id, reviewer, conclusion, generation FROM reviews ORDER BY reviewer`)
+		`SELECT task_id, reviewer, conclusion, generation FROM reviews WHERE task_id=? ORDER BY reviewer`, taskID)
 	if err != nil {
 		return nil, err
 	}
