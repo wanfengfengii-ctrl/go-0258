@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DairyGate 检验控制台</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>DairyGate 生鲜乳罐批入厂前联合检验</h1>
+    <p id="health" class="muted">正在连接后端…</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>新建检验任务</h2>
+      <form id="create-form" class="create-form">
+        <label>任务 ID <input name="taskId" required placeholder="task-001"></label>
+        <label>牧场编号 <input name="farmId" value="farm-dairy-001" required></label>
+        <label>乳罐批号 <input name="tankBatch" required placeholder="BATCH-2026-001"></label>
+        <label>隔舱(逗号分隔) <input name="compartments" value="A,B" required></label>
+        <label>封签(逗号分隔) <input name="seals" value="seal-0001,seal-0002" required></label>
+        <label>记录器型号 <input name="recorderModel" value="recorder-x1"></label>
+        <label>规则版本 <input name="ruleVersion" value="rules-v2026-1"></label>
+        <label>复核人(逗号分隔) <input name="reviewers" value="person-reviewer-a,person-reviewer-b"></label>
+        <button type="submit">建检</button>
+        <span id="create-msg" class="msg"></span>
+      </form>
+    </section>
+
+    <section>
+      <h2>检验任务</h2>
+      <button id="refresh" type="button">刷新</button>
+      <table id="tasks">
+        <thead>
+          <tr><th>任务 ID</th><th>乳罐批号</th><th>状态</th><th>代次</th><th>终局</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section id="detail-section" class="hidden">
+      <h2>任务详情</h2>
+      <div id="detail"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
