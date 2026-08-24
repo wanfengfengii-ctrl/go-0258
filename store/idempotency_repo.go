@@ -7,15 +7,18 @@ import (
 	"github.com/dairygate/raw-milk-tank-intake-inspection/inspection"
 )
 
-// GetIdempotency returns the record for a task/operation, if any.
-func (s *sqliteTx) GetIdempotency(ctx context.Context, _ inspection.TaskID, opID inspection.OperationID) (inspection.IdempotencyRecord, bool, error) {
+// GetIdempotency returns the record for a task/operation, if any. The key is
+// the (task, operation) pair, matching the table's primary key: the same
+// operation id reused across different tasks must not collide, so the lookup
+// scopes by both task id and operation id.
+func (s *sqliteTx) GetIdempotency(ctx context.Context, taskID inspection.TaskID, opID inspection.OperationID) (inspection.IdempotencyRecord, bool, error) {
 	var (
 		rec      inspection.IdempotencyRecord
 		response []byte
 	)
 	err := s.tx.QueryRowContext(ctx,
 		`SELECT task_id, operation_id, operation_type, request_digest, response, error_code, logical_time
-		 FROM idempotency_records WHERE operation_id=?`, opID).
+		 FROM idempotency_records WHERE task_id=? AND operation_id=?`, taskID, opID).
 		Scan(&rec.TaskID, &rec.OperationID, &rec.OperationType, &rec.RequestDigest, &response, &rec.ErrorCode, &rec.LogicalTime)
 	if err != nil {
 		if err == sql.ErrNoRows {
