@@ -112,7 +112,10 @@ CREATE TABLE IF NOT EXISTS reviews (
     reviewer    TEXT NOT NULL,
     conclusion  TEXT NOT NULL,
     generation  INTEGER NOT NULL,
-    PRIMARY KEY (task_id, reviewer, conclusion)
+    -- One review per reviewer, regardless of conclusion: a reviewer who already
+    -- recorded a fail may not overwrite it with a pass by retrying under a new
+    -- operation id.
+    PRIMARY KEY (task_id, reviewer)
 );
 
 CREATE TABLE IF NOT EXISTS audit_events (
