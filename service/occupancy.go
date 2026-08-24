@@ -66,7 +66,11 @@ func (s *Service) AcquireOccupancy(ctx context.Context, id inspection.TaskID, re
 			if err := tx.AcquireOccupancy(ctx, o); err != nil {
 				switch err {
 				case occupancy.ErrOccupied:
-					continue
+					// A conflict on any resource aborts the whole acquisition:
+					// returning here leaves the transaction with an error, so
+					// WithTx rolls back every well/slot already reserved in
+					// this batch and the task never advances.
+					return NewFault(CodeOccupancyConflict, o.ResourceKey())
 				case occupancy.ErrInvalidLease:
 					return NewFault(CodeInvalidLease, o.ResourceKey())
 				default:
