@@ -72,24 +72,16 @@ func (s *Service) SubmitReading(ctx context.Context, id inspection.TaskID, req R
 
 		if req.InstrumentType != "" || req.ErrorClass != "" {
 			call := s.recordInstrumentFailure(ctx, tx, task, req)
-			status := task.Status
-			generation := task.Generation
-			if call.ErrorClass == ErrClassRejected {
-				updated := task
-				updated.Status = nextStatus(task.Status)
-				if err := tx.UpdateTaskCAS(ctx, task.ID, task.Status, task.Generation, updated); err != nil {
-					return err
-				}
-				status = updated.Status
-				generation = updated.Generation
-			}
+			// A failed instrument call only appends an auditable retry record;
+			// it never forges a pass and never advances the phase. The phase
+			// advances only when a complete, valid reading set is written.
 			if err := tx.PutIdempotency(ctx, inspection.IdempotencyRecord{
 				TaskID: task.ID, OperationID: req.OperationID, OperationType: inspection.OpReading,
 				RequestDigest: digest, LogicalTime: s.clock.Now(), ErrorCode: CodeInstrumentFailure,
 			}); err != nil {
 				return err
 			}
-			result = &ReadingResult{TaskID: task.ID, Generation: generation, Status: status, Type: req.Type, Instrument: &call}
+			result = &ReadingResult{TaskID: task.ID, Generation: task.Generation, Status: task.Status, Type: req.Type, Instrument: &call}
 			return nil
 		}
 
