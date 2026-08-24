@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 
+	"github.com/dairygate/raw-milk-tank-intake-inspection/catalog"
 	"github.com/dairygate/raw-milk-tank-intake-inspection/inspection"
 )
 
@@ -65,6 +66,41 @@ func (s *sqliteTx) GetTask(ctx context.Context, id inspection.TaskID) (inspectio
 		return inspection.Task{}, err
 	}
 	return t, nil
+}
+
+// openTerminalStatuses lists the four terminal outcomes; a task in any other
+// status still holds its batch open and blocks a second concurrent build.
+var openTerminalStatuses = map[inspection.Status]bool{
+	inspection.StatusAdmissible:  true,
+	inspection.StatusEntered:     true,
+	inspection.StatusQuarantined: true,
+	inspection.StatusCancelled:  true,
+}
+
+// OpenTaskForBatch reports whether a non-terminal task already holds the given
+// tank batch for the farm. Because writes are serialized through writeMu, the
+// read-then-insert sequence in CreateTask is atomic: a concurrent build sees
+// the first task's row and is rejected before it inserts its own.
+func (s *sqliteTx) OpenTaskForBatch(ctx context.Context, farmID catalog.FarmID, batch inspection.TankBatch) (inspection.TaskID, bool, error) {
+	rows, err := s.tx.QueryContext(ctx,
+		`SELECT id, status FROM inspection_tasks WHERE farm_id=? AND tank_batch=? ORDER BY created_at, id`, farmID, batch)
+	if err != nil {
+		return "", false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			id     inspection.TaskID
+			status inspection.Status
+		)
+		if err := rows.Scan(&id, &status); err != nil {
+			return "", false, err
+		}
+		if !openTerminalStatuses[status] {
+			return id, true, nil
+		}
+	}
+	return "", false, rows.Err()
 }
 
 // UpdateTaskCAS applies a compare-and-set update: it only writes when the

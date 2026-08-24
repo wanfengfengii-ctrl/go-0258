@@ -72,6 +72,14 @@ func (s *Service) CreateTask(ctx context.Context, req CreateTaskRequest) (*Creat
 	}
 
 	err := s.store.WithTx(ctx, func(tx store.Tx) error {
+		// A tank batch may drive at most one open inspection task. A re-submit
+		// of the same farm/batch (even with a different taskId) is rejected so
+		// the batch cannot be advanced by two concurrent flows.
+		if existing, open, err := tx.OpenTaskForBatch(ctx, task.FarmID, task.TankBatch); err != nil {
+			return err
+		} else if open {
+			return NewFault(CodeConflict, "tank batch "+string(task.TankBatch)+" already has open task "+string(existing))
+		}
 		if err := tx.CreateTask(ctx, task); err != nil {
 			return err
 		}
@@ -84,6 +92,9 @@ func (s *Service) CreateTask(ctx context.Context, req CreateTaskRequest) (*Creat
 		})
 	})
 	if err != nil {
+		if f, ok := err.(*Fault); ok {
+			return nil, f
+		}
 		if err == store.ErrConflict {
 			return nil, NewFault(CodeConflict, "task already exists")
 		}

@@ -47,6 +47,10 @@ type Tx interface {
 	// Tasks.
 	CreateTask(ctx context.Context, t inspection.Task) error
 	GetTask(ctx context.Context, id inspection.TaskID) (inspection.Task, error)
+	// OpenTaskForBatch reports whether a non-terminal task already holds the
+	// given tank batch. It is the cross-task uniqueness gate enforced at
+	// build time so the same batch cannot drive two concurrent flows.
+	OpenTaskForBatch(ctx context.Context, farmID catalog.FarmID, batch inspection.TankBatch) (inspection.TaskID, bool, error)
 	// UpdateTaskCAS applies a compare-and-set status/generation update. It
 	// returns ErrConflict when the expected status or generation no longer
 	// matches.
