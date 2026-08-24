@@ -55,13 +55,11 @@ func (s *Service) Finalize(ctx context.Context, id inspection.TaskID, req Finali
 			return e
 		}
 
-		if task.FinalType != "" {
-			return NewFault(CodeTerminalState, string(task.FinalType))
-		}
-		if !inspection.Allows(task.Status, inspection.CmdFinalize) {
-			return NewFault(CodeIllegalTransition, string(task.Status))
-		}
-
+		// Idempotency is checked before the terminal-state and state-machine
+		// guards so that a retry of a finalize whose first attempt already
+		// moved the task to a terminal outcome replays the recorded credential
+		// instead of being rejected as terminal. The generation lock above
+		// still rejects a retry whose generation was superseded.
 		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
 		if err != nil {
 			return err
@@ -76,6 +74,13 @@ func (s *Service) Finalize(ctx context.Context, id inspection.TaskID, req Finali
 				result = &FinalizeResult{TaskID: task.ID, Generation: task.Generation, FinalType: fd.FinalType, Credential: fd.Credential}
 			}
 			return nil
+		}
+
+		if task.FinalType != "" {
+			return NewFault(CodeTerminalState, string(task.FinalType))
+		}
+		if !inspection.Allows(task.Status, inspection.CmdFinalize) {
+			return NewFault(CodeIllegalTransition, string(task.Status))
 		}
 
 		input, err := s.buildDecisionInput(ctx, tx, task)

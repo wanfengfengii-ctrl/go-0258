@@ -51,11 +51,12 @@ func (s *Service) SubmitReading(ctx context.Context, id inspection.TaskID, req R
 		if f := guardTask(task, req.Generation); f != nil {
 			return f
 		}
-		phase := phaseForType(req.Type)
-		if phase != task.Status {
-			return NewFault(CodeIllegalTransition, "reading type "+string(req.Type)+" not allowed at "+string(task.Status))
-		}
 
+		// Idempotency is checked before the phase (state-machine) guard so that
+		// a retry of a reading whose first attempt already advanced the phase
+		// replays the recorded outcome instead of being rejected for the new
+		// status. The generation lock above still rejects a retry whose
+		// generation was superseded.
 		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
 		if err != nil {
 			return err
@@ -68,6 +69,11 @@ func (s *Service) SubmitReading(ctx context.Context, id inspection.TaskID, req R
 			current, _ := tx.GetTask(ctx, task.ID)
 			result = &ReadingResult{TaskID: task.ID, Generation: current.Generation, Status: current.Status, Type: req.Type}
 			return nil
+		}
+
+		phase := phaseForType(req.Type)
+		if phase != task.Status {
+			return NewFault(CodeIllegalTransition, "reading type "+string(req.Type)+" not allowed at "+string(task.Status))
 		}
 
 		if req.InstrumentType != "" || req.ErrorClass != "" {

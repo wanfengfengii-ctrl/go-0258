@@ -47,10 +47,12 @@ func (s *Service) ColdChainReadings(ctx context.Context, id inspection.TaskID, r
 		if f := guardTask(task, req.Generation); f != nil {
 			return f
 		}
-		if !inspection.Allows(task.Status, inspection.CmdColdChainReadings) {
-			return NewFault(CodeIllegalTransition, string(task.Status))
-		}
 
+		// Idempotency is checked before the state-machine guard so that a retry
+		// of a command whose first attempt already advanced the task replays
+		// the recorded outcome instead of being rejected for the new status.
+		// The generation lock above still rejects a retry whose generation was
+		// superseded.
 		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
 		if err != nil {
 			return err
@@ -61,6 +63,10 @@ func (s *Service) ColdChainReadings(ctx context.Context, id inspection.TaskID, r
 				return NewFault(CodeContentConflict, "retry with different content")
 			}
 			return s.fillColdChainResult(ctx, tx, task, result)
+		}
+
+		if !inspection.Allows(task.Status, inspection.CmdColdChainReadings) {
+			return NewFault(CodeIllegalTransition, string(task.Status))
 		}
 
 		rules, ok := s.Catalog().Rules(task.RuleVersion)

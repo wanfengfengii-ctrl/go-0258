@@ -45,16 +45,12 @@ func (s *Service) Review(ctx context.Context, id inspection.TaskID, req ReviewRe
 		if f := guardTask(task, req.Generation); f != nil {
 			return f
 		}
-		if !inspection.Allows(task.Status, inspection.CmdReview) {
-			return NewFault(CodeIllegalTransition, string(task.Status))
-		}
-		if !s.Catalog().Qualifies(task.RuleVersion, req.Reviewer, catalog.RoleReviewer) {
-			return NewFault(CodeNotQualified, "reviewer "+string(req.Reviewer)+" not qualified")
-		}
-		if catalog.HoldsAny(s.Catalog(), task.RuleVersion, req.Reviewer, catalog.RoleSampler) {
-			return NewFault(CodeRoleOverlap, "reviewer "+string(req.Reviewer)+" already sampled")
-		}
 
+		// Idempotency is checked before the state-machine guard so that a retry
+		// of a command whose first attempt already advanced the task replays
+		// the recorded outcome instead of being rejected for the new status.
+		// The generation lock above still rejects a retry whose generation was
+		// superseded.
 		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
 		if err != nil {
 			return err
@@ -67,6 +63,16 @@ func (s *Service) Review(ctx context.Context, id inspection.TaskID, req ReviewRe
 			reviews, _ := tx.ListReviews(ctx, task.ID)
 			result = &ReviewResult{TaskID: task.ID, Generation: task.Generation, Reviewer: req.Reviewer, Conclusion: req.Conclusion, ReviewCount: len(reviews)}
 			return nil
+		}
+
+		if !inspection.Allows(task.Status, inspection.CmdReview) {
+			return NewFault(CodeIllegalTransition, string(task.Status))
+		}
+		if !s.Catalog().Qualifies(task.RuleVersion, req.Reviewer, catalog.RoleReviewer) {
+			return NewFault(CodeNotQualified, "reviewer "+string(req.Reviewer)+" not qualified")
+		}
+		if catalog.HoldsAny(s.Catalog(), task.RuleVersion, req.Reviewer, catalog.RoleSampler) {
+			return NewFault(CodeRoleOverlap, "reviewer "+string(req.Reviewer)+" already sampled")
 		}
 
 		r := arbiter.Review{TaskID: string(task.ID), Reviewer: req.Reviewer, Conclusion: req.Conclusion, Generation: int64(task.Generation)}

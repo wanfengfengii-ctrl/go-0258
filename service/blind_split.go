@@ -42,10 +42,13 @@ func (s *Service) BlindSplit(ctx context.Context, id inspection.TaskID, req Blin
 		if f := guardTask(task, req.Generation); f != nil {
 			return f
 		}
-		if !inspection.Allows(task.Status, inspection.CmdBlindSplit) {
-			return NewFault(CodeIllegalTransition, string(task.Status))
-		}
 
+		// Idempotency is checked before the state-machine guard so that a retry
+		// of a command whose first attempt already advanced the task (for
+		// example a blind split that moved the task out of blind_splitting)
+		// replays the recorded outcome instead of being rejected for the new
+		// status. The generation lock above still rejects a retry whose
+		// generation was superseded.
 		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
 		if err != nil {
 			return err
@@ -58,6 +61,10 @@ func (s *Service) BlindSplit(ctx context.Context, id inspection.TaskID, req Blin
 			blinds, _ := tx.ListBlind(ctx, task.ID)
 			result = blindSplitResult(task, blinds)
 			return nil
+		}
+
+		if !inspection.Allows(task.Status, inspection.CmdBlindSplit) {
+			return NewFault(CodeIllegalTransition, string(task.Status))
 		}
 
 		splitter := blindcode.NewSplitter(req.Codes)

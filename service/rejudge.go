@@ -43,15 +43,13 @@ func (s *Service) Rejudge(ctx context.Context, id inspection.TaskID, req Rejudge
 		if f := guardTask(task, req.Generation); f != nil {
 			return f
 		}
-		if !inspection.Allows(task.Status, inspection.CmdRejudge) {
-			return NewFault(CodeIllegalTransition, string(task.Status))
-		}
-		if _, exists, err := tx.GetRejudgement(ctx, task.ID, int64(task.Generation)); err != nil {
-			return err
-		} else if exists {
-			return NewFault(CodeRejudgementExists, "generation "+strconvItoa(int(task.Generation)))
-		}
 
+		// Idempotency is checked before the state-machine guard so that a retry
+		// of a command whose first attempt already advanced the task replays
+		// the recorded outcome instead of being rejected for the new status.
+		// The generation lock above still rejects a retry whose generation was
+		// superseded, which is the correct response when a rejudgement has
+		// bumped the generation past a stale retry.
 		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
 		if err != nil {
 			return err
@@ -63,6 +61,15 @@ func (s *Service) Rejudge(ctx context.Context, id inspection.TaskID, req Rejudge
 			}
 			result = &RejudgementResult{TaskID: task.ID, Generation: task.Generation, Reason: req.Reason}
 			return nil
+		}
+
+		if !inspection.Allows(task.Status, inspection.CmdRejudge) {
+			return NewFault(CodeIllegalTransition, string(task.Status))
+		}
+		if _, exists, err := tx.GetRejudgement(ctx, task.ID, int64(task.Generation)); err != nil {
+			return err
+		} else if exists {
+			return NewFault(CodeRejudgementExists, "generation "+strconvItoa(int(task.Generation)))
 		}
 
 		r := arbiter.Rejudgement{

@@ -41,10 +41,12 @@ func (s *Service) AcquireOccupancy(ctx context.Context, id inspection.TaskID, re
 		if f := guardTask(task, req.Generation); f != nil {
 			return f
 		}
-		if !inspection.Allows(task.Status, inspection.CmdOccupancyAcquire) {
-			return NewFault(CodeIllegalTransition, string(task.Status))
-		}
 
+		// Idempotency is checked before the state-machine guard so that a retry
+		// of a command whose first attempt already advanced the task replays
+		// the recorded outcome instead of being rejected for the new status.
+		// The generation lock above still rejects a retry whose generation was
+		// superseded.
 		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
 		if err != nil {
 			return err
@@ -57,6 +59,10 @@ func (s *Service) AcquireOccupancy(ctx context.Context, id inspection.TaskID, re
 			held, _ := tx.ListOccupancy(ctx, task.ID)
 			result = &OccupancyResult{TaskID: task.ID, Generation: task.Generation, Status: task.Status, Acquired: held}
 			return nil
+		}
+
+		if !inspection.Allows(task.Status, inspection.CmdOccupancyAcquire) {
+			return NewFault(CodeIllegalTransition, string(task.Status))
 		}
 
 		for i := range req.Occupancies {

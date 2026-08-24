@@ -46,6 +46,31 @@ func (s *Service) SamplingConfirm(ctx context.Context, id inspection.TaskID, req
 		if f := guardTask(task, req.Generation); f != nil {
 			return f
 		}
+		now := s.clock.Now()
+		rec := inspection.IdempotencyRecord{
+			TaskID:        task.ID,
+			OperationID:   req.OperationID,
+			OperationType: inspection.OpSamplingConfirm,
+			RequestDigest: inspection.DigestOf(req),
+			LogicalTime:   now,
+		}
+		// Idempotency is checked before the state-machine guard so that a retry
+		// of a command whose first attempt already advanced the task replays
+		// the recorded outcome instead of being rejected for the new status.
+		// The generation lock above still rejects a retry whose generation was
+		// superseded.
+		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			if prior.ContentConflicts(rec.RequestDigest) {
+				return NewFault(CodeContentConflict, "retry with different content")
+			}
+			result, err = s.buildSamplingResult(ctx, tx, task)
+			return err
+		}
+
 		if !inspection.Allows(task.Status, inspection.CmdSamplingConfirm) {
 			return NewFault(CodeIllegalTransition, string(task.Status))
 		}
@@ -60,26 +85,6 @@ func (s *Service) SamplingConfirm(ctx context.Context, id inspection.TaskID, req
 		}
 		if !sameStringSet(req.Compartments, task.Compartments) || !sameStringSet(req.Seals, task.Seals) {
 			return NewFault(CodeContentConflict, "compartment or seal mismatch")
-		}
-
-		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
-		if err != nil {
-			return err
-		}
-		now := s.clock.Now()
-		rec := inspection.IdempotencyRecord{
-			TaskID:        task.ID,
-			OperationID:   req.OperationID,
-			OperationType: inspection.OpSamplingConfirm,
-			RequestDigest: inspection.DigestOf(req),
-			LogicalTime:   now,
-		}
-		if exists {
-			if prior.ContentConflicts(rec.RequestDigest) {
-				return NewFault(CodeContentConflict, "retry with different content")
-			}
-			result, err = s.buildSamplingResult(ctx, tx, task)
-			return err
 		}
 
 		existing, err := tx.ListSamplingConfirmations(ctx, task.ID)
