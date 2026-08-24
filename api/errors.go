@@ -13,7 +13,7 @@ func httpStatusFor(code string) int {
 		return http.StatusBadRequest
 	case "conflict", "content_conflict", "stale_generation", "terminal_state",
 		"occupancy_conflict", "finalize_conflict", "rejudgement_exists",
-		"duplicate_review":
+		"duplicate_review", "blind_unknown":
 		return http.StatusConflict
 	default:
 		return http.StatusUnprocessableEntity

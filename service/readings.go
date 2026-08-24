@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/dairygate/raw-milk-tank-intake-inspection/blindcode"
 	"github.com/dairygate/raw-milk-tank-intake-inspection/catalog"
 	"github.com/dairygate/raw-milk-tank-intake-inspection/evidence"
 	"github.com/dairygate/raw-milk-tank-intake-inspection/inspection"
@@ -54,6 +55,16 @@ func (s *Service) SubmitReading(ctx context.Context, id inspection.TaskID, req R
 		phase := phaseForType(req.Type)
 		if phase != task.Status {
 			return NewFault(CodeIllegalTransition, "reading type "+string(req.Type)+" not allowed at "+string(task.Status))
+		}
+		// A reading may only be recorded against a blind code that the
+		// one-time blind-code gate established for this task. An unmapped or
+		// foreign blind code must not contribute evidence or advance a phase.
+		sample, mapped, err := tx.GetBlindByCode(ctx, blindcode.BlindCode(req.BlindCode))
+		if err != nil {
+			return err
+		}
+		if !mapped || sample.TaskID != task.ID {
+			return NewFault(CodeBlindUnknown, "blind code "+req.BlindCode+" not mapped to task")
 		}
 
 		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
@@ -173,22 +184,40 @@ func classifyError(req ReadingRequest) string {
 	return ErrClassRejected
 }
 
+// phaseComplete reports whether every registered blind code carries the full
+// set of required reading types for the current phase. Evidence recorded under
+// a blind code that is not registered for this task, or a missing required type
+// for any one blind code, leaves the phase incomplete so it cannot advance on a
+// partial reading set.
 func (s *Service) phaseComplete(ctx context.Context, tx store.Tx, task inspection.Task) bool {
 	blinds, _ := tx.ListBlind(ctx, task.ID)
 	if len(blinds) == 0 {
 		return false
 	}
-	records, _ := tx.ListEvidence(ctx, task.ID)
 	required := typesForPhase(task.Status)
-	count := 0
+	if len(required) == 0 {
+		return false
+	}
+	records, _ := tx.ListEvidence(ctx, task.ID)
+	// Index the evidence present for this task by (blind code, type).
+	present := make(map[string]map[evidence.EvidenceType]bool, len(blinds))
 	for _, r := range records {
+		m := present[r.BlindCode]
+		if m == nil {
+			m = make(map[evidence.EvidenceType]bool, len(required))
+			present[r.BlindCode] = m
+		}
+		m[r.Type] = true
+	}
+	for _, b := range blinds {
+		m := present[string(b.BlindCode)]
 		for _, t := range required {
-			if r.Type == t {
-				count++
+			if m == nil || !m[t] {
+				return false
 			}
 		}
 	}
-	return count >= len(blinds)*len(required)
+	return true
 }
 
 func phaseForType(t evidence.EvidenceType) inspection.Status {

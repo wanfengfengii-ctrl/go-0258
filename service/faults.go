@@ -27,6 +27,7 @@ const (
 	CodeIllegalTransition    = "illegal_transition"
 	CodeDuplicateBlind       = "duplicate_blind"
 	CodeBlindReuse           = "blind_reuse"
+	CodeBlindUnknown         = "blind_unknown"
 	CodePrematureReveal      = "premature_reveal"
 	CodeSplitCount           = "split_count"
 	CodeSplitMismatch        = "split_mismatch"

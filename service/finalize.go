@@ -190,6 +190,25 @@ func (s *Service) buildDecisionInput(ctx context.Context, tx store.Tx, task insp
 	input.AntibioticPass = true
 	input.MicrobialPass = true
 	input.PhysicoPass = true
+	// A final decision is only admissible when every registered blind code
+	// carries the full required evidence set: antibiotic, somatic cell,
+	// colony, freezing point, fat and protein. Missing evidence for any blind
+	// code fails the evidence gate; absent measurements must never default to
+	// a pass.
+	requiredTypes := []evidence.EvidenceType{
+		evidence.EvidenceAntibiotic, evidence.EvidenceSomaticCell, evidence.EvidenceColony,
+		evidence.EvidenceFreezingPoint, evidence.EvidenceFat, evidence.EvidenceProtein,
+	}
+	present := make(map[string]map[evidence.EvidenceType]bool)
+	for _, r := range records {
+		m := present[r.BlindCode]
+		if m == nil {
+			m = make(map[evidence.EvidenceType]bool, len(requiredTypes))
+			present[r.BlindCode] = m
+		}
+		m[r.Type] = true
+	}
+	input.EvidenceComplete = true
 	for _, r := range records {
 		switch r.Type {
 		case evidence.EvidenceAntibiotic:
@@ -215,6 +234,18 @@ func (s *Service) buildDecisionInput(ctx context.Context, tx store.Tx, task insp
 		case evidence.EvidenceProtein:
 			if !calc.ProteinPass(r.Raw).Pass {
 				input.PhysicoPass = false
+			}
+		}
+	}
+	blinds, err := tx.ListBlind(ctx, task.ID)
+	if err != nil {
+		return arbiter.DecisionInput{}, err
+	}
+	for _, b := range blinds {
+		m := present[string(b.BlindCode)]
+		for _, t := range requiredTypes {
+			if m == nil || !m[t] {
+				input.EvidenceComplete = false
 			}
 		}
 	}

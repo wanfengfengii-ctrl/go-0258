@@ -36,6 +36,7 @@ func TestEvaluateDecisionPreconditions(t *testing.T) {
 	input := DecisionInput{
 		ColdChainComplete: true, ColdChainOver: false,
 		AntibioticPass: true, MicrobialPass: true, PhysicoPass: true,
+		EvidenceComplete: true,
 		RequiredReviewers: 2,
 		Reviews: []Review{
 			{Reviewer: "r1", Conclusion: ReviewPass},

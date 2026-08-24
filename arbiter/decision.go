@@ -19,6 +19,7 @@ type DecisionInput struct {
 	AntibioticPass    bool     `json:"antibioticPass"`
 	MicrobialPass     bool     `json:"microbialPass"`
 	PhysicoPass       bool     `json:"physicoPass"`
+	EvidenceComplete  bool     `json:"evidenceComplete"`
 	Contaminated      bool     `json:"contaminated"`
 	SplitDisagreement bool     `json:"splitDisagreement"`
 	RequiredReviewers int      `json:"requiredReviewers"`
@@ -49,6 +50,9 @@ func Evaluate(input DecisionInput) Conclusion {
 	}
 	if !input.PhysicoPass {
 		reasons = append(reasons, "physicochemical_fail")
+	}
+	if !input.EvidenceComplete {
+		reasons = append(reasons, "evidence_incomplete")
 	}
 	if input.Contaminated {
 		reasons = append(reasons, "contaminated")
