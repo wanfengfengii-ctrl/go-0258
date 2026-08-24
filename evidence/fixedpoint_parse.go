@@ -47,7 +47,10 @@ func ParseFixedPoint(text string, scale int) (FixedPoint, error) {
 	for i := 0; i < scale; i++ {
 		mult *= 10
 	}
-	value, _ := mulChecked(whole, mult)
+	value, ok := mulChecked(whole, mult)
+	if !ok {
+		return FixedPoint{}, ErrOverflow
+	}
 	fracMult := mult
 	for i := 0; i < len(fracPart); i++ {
 		fracMult /= 10
@@ -55,7 +58,11 @@ func ParseFixedPoint(text string, scale int) (FixedPoint, error) {
 		if d < '0' || d > '9' {
 			return FixedPoint{}, fmt.Errorf("fixed point: invalid fraction digit %q", string(d))
 		}
-		value += int64(d-'0') * fracMult
+		v, ok := addChecked(value, int64(d-'0')*fracMult)
+		if !ok {
+			return FixedPoint{}, ErrOverflow
+		}
+		value = v
 	}
 	if neg {
 		value = -value
