@@ -110,10 +110,19 @@ func (s *sqliteTx) ListReviews(ctx context.Context, taskID inspection.TaskID) ([
 	return out, rows.Err()
 }
 
-// PutFinalDecision inserts the unique terminal credential.
+// PutFinalDecision upserts the unique terminal credential. The first
+// finalization (admissible/quarantined/cancelled) inserts a row; advancing an
+// already-admissible task to entered updates that same row in place. A task
+// holds exactly one terminal decision, so the credential, final type and
+// logical time are replaced on conflict.
 func (s *sqliteTx) PutFinalDecision(ctx context.Context, taskID inspection.TaskID, finalType inspection.FinalType, credential string, logicalTime int64) error {
 	_, err := s.tx.ExecContext(ctx,
-		`INSERT INTO final_decisions (task_id, final_type, credential, logical_time) VALUES (?,?,?,?)`,
+		`INSERT INTO final_decisions (task_id, final_type, credential, logical_time)
+		 VALUES (?,?,?,?)
+		 ON CONFLICT(task_id) DO UPDATE SET
+		   final_type = excluded.final_type,
+		   credential = excluded.credential,
+		   logical_time = excluded.logical_time`,
 		taskID, finalType, credential, logicalTime,
 	)
 	if err != nil {
