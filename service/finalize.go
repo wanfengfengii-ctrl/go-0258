@@ -35,7 +35,9 @@ func (s *Service) Finalize(ctx context.Context, id inspection.TaskID, req Finali
 		return nil, NewFault(CodeBadRequest, "outcome must be admissible, entered, quarantined or cancelled")
 	}
 
-	ctx = context.Background()
+	// The terminal write must follow the request's context so a cancelled
+	// (gateway-disconnected) finalize aborts the transaction instead of
+	// committing a terminal outcome the caller never observed.
 	var result *FinalizeResult
 	err := s.store.WithTx(ctx, func(tx store.Tx) error {
 		task, fault := s.taskFrom(ctx, tx, id)
