@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/dairygate/raw-milk-tank-intake-inspection/arbiter"
 	"github.com/dairygate/raw-milk-tank-intake-inspection/catalog"
@@ -64,9 +65,10 @@ func (s *Service) Review(ctx context.Context, id inspection.TaskID, req ReviewRe
 			if prior.ContentConflicts(digest) {
 				return NewFault(CodeContentConflict, "retry with different content")
 			}
-			reviews, _ := tx.ListReviews(ctx, task.ID)
-			result = &ReviewResult{TaskID: task.ID, Generation: task.Generation, Reviewer: req.Reviewer, Conclusion: req.Conclusion, ReviewCount: len(reviews)}
-			return nil
+			// Replay the original outcome so an identical retry returns the
+			// same response even after later reviews changed the count.
+			result, err = decodeReviewResult(prior.Response)
+			return err
 		}
 
 		r := arbiter.Review{TaskID: string(task.ID), Reviewer: req.Reviewer, Conclusion: req.Conclusion, Generation: int64(task.Generation)}
@@ -77,9 +79,18 @@ func (s *Service) Review(ctx context.Context, id inspection.TaskID, req ReviewRe
 			return err
 		}
 		now := s.clock.Now()
+		// Compute the outcome once and persist it verbatim so a retry with the
+		// same operation id replays the original response instead of
+		// re-deriving it from mutable state.
+		reviews, _ := tx.ListReviews(ctx, task.ID)
+		result = &ReviewResult{TaskID: task.ID, Generation: task.Generation, Reviewer: req.Reviewer, Conclusion: req.Conclusion, ReviewCount: len(reviews)}
+		encoded, err := encodeReviewResult(result)
+		if err != nil {
+			return err
+		}
 		if err := tx.PutIdempotency(ctx, inspection.IdempotencyRecord{
 			TaskID: task.ID, OperationID: req.OperationID, OperationType: inspection.OpReview,
-			RequestDigest: digest, LogicalTime: now,
+			RequestDigest: digest, Response: encoded, LogicalTime: now,
 		}); err != nil {
 			return err
 		}
@@ -90,8 +101,6 @@ func (s *Service) Review(ctx context.Context, id inspection.TaskID, req ReviewRe
 		}); err != nil {
 			return err
 		}
-		reviews, _ := tx.ListReviews(ctx, task.ID)
-		result = &ReviewResult{TaskID: task.ID, Generation: task.Generation, Reviewer: req.Reviewer, Conclusion: req.Conclusion, ReviewCount: len(reviews)}
 		return nil
 	})
 	if err != nil {
@@ -101,4 +110,25 @@ func (s *Service) Review(ctx context.Context, id inspection.TaskID, req ReviewRe
 		return nil, NewFault(CodeStoreError, err.Error())
 	}
 	return result, nil
+}
+
+// encodeReviewResult renders a review outcome as the exact bytes stored on the
+// idempotency record and replayed on retry.
+func encodeReviewResult(r *ReviewResult) ([]byte, error) {
+	return json.Marshal(r)
+}
+
+// decodeReviewResult restores the original review outcome from the bytes
+// captured when the command first applied. Missing bytes (a record written by
+// an older version that never captured a response) fall back to nil so the
+// caller treats the retry as not-yet-applied.
+func decodeReviewResult(b []byte) (*ReviewResult, error) {
+	if len(b) == 0 {
+		return nil, nil
+	}
+	var r ReviewResult
+	if err := json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
