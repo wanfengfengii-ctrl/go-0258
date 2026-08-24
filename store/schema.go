@@ -87,8 +87,8 @@ CREATE TABLE IF NOT EXISTS evidence_records (
 CREATE INDEX IF NOT EXISTS idx_evidence_task ON evidence_records(task_id);
 
 CREATE TABLE IF NOT EXISTS instrument_calls (
-    call_id          TEXT NOT NULL,
-    task_id          TEXT PRIMARY KEY,
+    call_id          TEXT PRIMARY KEY,
+    task_id          TEXT NOT NULL,
     instrument_type  TEXT NOT NULL,
     target           TEXT NOT NULL,
     script_result    TEXT NOT NULL,
@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS instrument_calls (
     next_retry_at    INTEGER NOT NULL,
     error_class      TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_instrument_task ON instrument_calls(task_id);
 
 CREATE TABLE IF NOT EXISTS rejudgements (
     task_id      TEXT NOT NULL,

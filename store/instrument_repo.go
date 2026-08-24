@@ -7,14 +7,22 @@ import (
 )
 
 // PutInstrumentCall appends an instrument invocation record with its retry
-// plan. Failures append; they never forge a pass.
+// plan. Failures append; they never forge a pass. Each call carries its own
+// call_id, so a task may accumulate many calls; a duplicate call_id yields
+// ErrConflict.
 func (s *sqliteTx) PutInstrumentCall(ctx context.Context, call InstrumentCall) error {
 	_, err := s.tx.ExecContext(ctx,
 		`INSERT INTO instrument_calls (call_id, task_id, instrument_type, target, script_result, retry_count, next_retry_at, error_class)
 		 VALUES (?,?,?,?,?,?,?,?)`,
 		call.CallID, call.TaskID, call.InstrumentType, call.Target, call.ScriptResult, call.RetryCount, call.NextRetryAt, call.ErrorClass,
 	)
-	return err
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrConflict
+		}
+		return err
+	}
+	return nil
 }
 
 // ListInstrumentCalls returns all instrument calls for a task, ordered by

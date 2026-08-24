@@ -71,7 +71,10 @@ func (s *Service) SubmitReading(ctx context.Context, id inspection.TaskID, req R
 		}
 
 		if req.InstrumentType != "" || req.ErrorClass != "" {
-			call := s.recordInstrumentFailure(ctx, tx, task, req)
+			call, err := s.recordInstrumentFailure(ctx, tx, task, req)
+			if err != nil {
+				return err
+			}
 			if err := tx.PutIdempotency(ctx, inspection.IdempotencyRecord{
 				TaskID: task.ID, OperationID: req.OperationID, OperationType: inspection.OpReading,
 				RequestDigest: digest, LogicalTime: s.clock.Now(), ErrorCode: CodeInstrumentFailure,
@@ -146,21 +149,28 @@ func (s *Service) SubmitReading(ctx context.Context, id inspection.TaskID, req R
 	return result, nil
 }
 
-func (s *Service) recordInstrumentFailure(ctx context.Context, tx store.Tx, task inspection.Task, req ReadingRequest) store.InstrumentCall {
+// recordInstrumentFailure appends an auditable instrument call record with a
+// deterministic retry plan, then emits an audit event. The instrument-call
+// append shares the command transaction: if it fails, the whole reading rolls
+// back instead of committing idempotency and audit state for a call that was
+// never persisted.
+func (s *Service) recordInstrumentFailure(ctx context.Context, tx store.Tx, task inspection.Task, req ReadingRequest) (store.InstrumentCall, error) {
 	planner := NewRetryPlanner(1, 3600)
 	call := planner.Plan(
 		NewID("call"), string(task.ID), req.InstrumentType, req.BlindCode,
 		req.ScriptResult, classifyError(req), s.clock.Now(),
 	)
-	_ = tx.PutInstrumentCall(ctx, call)
+	if err := tx.PutInstrumentCall(ctx, call); err != nil {
+		return call, err
+	}
 	if err := s.appendAudit(ctx, tx, inspection.AuditEvent{
 		TaskID: task.ID, Generation: task.Generation,
 		EventType: inspection.EventReading, LogicalTime: s.clock.Now(),
 		Detail: "instrument failure " + call.ErrorClass,
 	}); err != nil {
-		return call
+		return call, err
 	}
-	return call
+	return call, nil
 }
 
 func classifyError(req ReadingRequest) string {
