@@ -1,0 +1,18 @@
+:root { color-scheme: light; }
+body { font-family: system-ui, -apple-system, sans-serif; margin: 2rem; color: #1a1a1a; max-width: 1000px; }
+.muted { color: #666; }
+h2 { margin-top: 2rem; }
+table { border-collapse: collapse; width: 100%; margin-top: 0.75rem; }
+th, td { border: 1px solid #ddd; padding: 0.5rem 0.75rem; text-align: left; }
+th { background: #f4f4f4; }
+button { padding: 0.4rem 1rem; cursor: pointer; }
+.create-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+.create-form label { display: flex; flex-direction: column; font-size: 0.85rem; }
+.create-form input { padding: 0.35rem; }
+.msg { margin-left: 0.75rem; font-size: 0.9rem; }
+.msg.ok { color: #157347; }
+.msg.error { color: #b02a37; }
+.hidden { display: none; }
+.error { color: #b02a37; }
+#detail h3 { margin-top: 1rem; }
+#detail ul { padding-left: 1.25rem; }
