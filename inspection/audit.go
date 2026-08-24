@@ -14,6 +14,7 @@ const (
 	EventSampled       EventType = "sampled"
 	EventBlindSplit    EventType = "blind_split"
 	EventOccupied      EventType = "occupied"
+	EventReleased      EventType = "released"
 	EventColdChain     EventType = "cold_chain"
 	EventReading       EventType = "reading"
 	EventRejudged      EventType = "rejudged"

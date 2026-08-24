@@ -125,8 +125,17 @@ func (s *Service) commitFinal(ctx context.Context, tx store.Tx, task inspection.
 		return nil, err
 	}
 
+	// A terminal task is no longer an active occupant of its plate wells and
+	// incubator slots, so its leases are released now: the resources become
+	// available for a later task that reuses the same well and time interval.
+	// ReleaseOccupancy is idempotent (it updates only released_at=0 rows), so
+	// re-finalizing an already-terminal task (e.g. entered after admissible)
+	// is a safe no-op.
 	credential := NewID("cred")
 	now := s.clock.Now()
+	if err := tx.ReleaseOccupancy(ctx, task.ID, now); err != nil {
+		return nil, err
+	}
 	if err := tx.PutFinalDecision(ctx, task.ID, req.Outcome, credential, now); err != nil {
 		return nil, err
 	}
@@ -139,6 +148,13 @@ func (s *Service) commitFinal(ctx context.Context, tx store.Tx, task inspection.
 	if err := s.appendAudit(ctx, tx, inspection.AuditEvent{
 		TaskID: task.ID, Generation: task.Generation,
 		EventType: inspection.EventFinalized, LogicalTime: now,
+		Detail: string(req.Outcome),
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.appendAudit(ctx, tx, inspection.AuditEvent{
+		TaskID: task.ID, Generation: task.Generation,
+		EventType: inspection.EventReleased, LogicalTime: now,
 		Detail: string(req.Outcome),
 	}); err != nil {
 		return nil, err
