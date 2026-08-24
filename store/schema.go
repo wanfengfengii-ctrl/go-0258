@@ -53,9 +53,15 @@ CREATE TABLE IF NOT EXISTS resource_occupancies (
     end_at        INTEGER NOT NULL,
     generation    INTEGER NOT NULL,
     released_at   INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (task_id, resource_key, start_at),
-    UNIQUE (resource_type, start_at)
+    PRIMARY KEY (task_id, resource_key, start_at)
 );
+-- Resource identity is already carried by resource_key (e.g.
+-- "plate_well:<plate>:<well>"). Two distinct wells on the same plate share
+-- only the resource_type, so a UNIQUE constraint keyed on resource_type
+-- alone would wrongly reject concurrent reservations of different wells that
+-- happen to start at the same logical time. Interval-overlap arbitration is
+-- enforced by the Go overlap check under serialized writes, backed by the
+-- partial active-occupancy index below.
 CREATE INDEX IF NOT EXISTS idx_occupancy_resource
     ON resource_occupancies(resource_key, start_at, end_at)
     WHERE released_at = 0;
