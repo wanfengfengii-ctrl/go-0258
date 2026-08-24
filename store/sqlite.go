@@ -119,6 +119,12 @@ func (s *SQLiteStore) Snapshot(ctx context.Context, id inspection.TaskID) (*Snap
 		return nil, err
 	}
 	st := &sqliteTx{tx: tx}
+	// The snapshot is a pure read; roll the transaction back on every exit
+	// path so the pooled connection is released. Without this the first
+	// snapshot holds its connection (and, under the single-connection
+	// in-memory store, the only connection), so the next GET blocks on the
+	// pool until the busy timeout. Match GetTask's read-transaction pattern.
+	defer tx.Rollback()
 
 	task, err := st.GetTask(ctx, id)
 	if err != nil {
