@@ -89,10 +89,13 @@ func (s *Service) Rejudge(ctx context.Context, id inspection.TaskID, req Rejudge
 			return err
 		}
 
+		// A rejudgement only records generation-stamped evidence and advances the
+		// generation so late readings at the old generation are rejected; it must
+		// not move the status. The task stays at pending_review (the only status
+		// that admits rejudge), keeping the forward-only status invariant. A cold
+		// chain break still forces quarantine at finalization via the data-driven
+		// cold_chain_over_limit gate rather than by regressing the pipeline.
 		updated := task
-		if req.Reason == arbiter.ReasonColdChainBreak {
-			updated.Status = inspection.StatusColdChainVerifying
-		}
 		updated.Generation = task.Generation + 1
 		if err := tx.UpdateTaskCAS(ctx, task.ID, task.Status, task.Generation, updated); err != nil {
 			return err
