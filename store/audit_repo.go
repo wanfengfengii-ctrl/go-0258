@@ -27,7 +27,7 @@ func (s *sqliteTx) AppendAudit(ctx context.Context, ev inspection.AuditEvent) er
 func (s *sqliteTx) ListAudit(ctx context.Context, taskID inspection.TaskID) ([]inspection.AuditEvent, error) {
 	rows, err := s.tx.QueryContext(ctx,
 		`SELECT sequence, task_id, generation, event_type, actor, detail, logical_time
-		 FROM audit_events ORDER BY sequence`)
+		 FROM audit_events WHERE task_id=? ORDER BY sequence`, taskID)
 	if err != nil {
 		return nil, err
 	}
