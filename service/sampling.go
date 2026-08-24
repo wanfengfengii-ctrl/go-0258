@@ -46,6 +46,24 @@ func (s *Service) SamplingConfirm(ctx context.Context, id inspection.TaskID, req
 		if f := guardTask(task, req.Generation); f != nil {
 			return f
 		}
+		// Idempotency replay must precede the state-machine check: a retry of an
+		// already-applied sampling confirmation (which may have advanced the task
+		// to blind_splitting once the second operator confirmed) must replay the
+		// recorded outcome instead of illegal_transition. The generation lock and
+		// terminal barrier still run first; only the per-status gate is deferred.
+		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
+		if err != nil {
+			return err
+		}
+		digest := inspection.DigestOf(req)
+		if exists {
+			if prior.ContentConflicts(digest) {
+				return NewFault(CodeContentConflict, "retry with different content")
+			}
+			result, err = s.buildSamplingResult(ctx, tx, task)
+			return err
+		}
+
 		if !inspection.Allows(task.Status, inspection.CmdSamplingConfirm) {
 			return NewFault(CodeIllegalTransition, string(task.Status))
 		}
@@ -62,24 +80,13 @@ func (s *Service) SamplingConfirm(ctx context.Context, id inspection.TaskID, req
 			return NewFault(CodeContentConflict, "compartment or seal mismatch")
 		}
 
-		prior, exists, err := tx.GetIdempotency(ctx, task.ID, req.OperationID)
-		if err != nil {
-			return err
-		}
 		now := s.clock.Now()
 		rec := inspection.IdempotencyRecord{
 			TaskID:        task.ID,
 			OperationID:   req.OperationID,
 			OperationType: inspection.OpSamplingConfirm,
-			RequestDigest: inspection.DigestOf(req),
+			RequestDigest: digest,
 			LogicalTime:   now,
-		}
-		if exists {
-			if prior.ContentConflicts(rec.RequestDigest) {
-				return NewFault(CodeContentConflict, "retry with different content")
-			}
-			result, err = s.buildSamplingResult(ctx, tx, task)
-			return err
 		}
 
 		existing, err := tx.ListSamplingConfirmations(ctx, task.ID)

@@ -44,6 +44,30 @@ func TestSamplingConfirmIdempotentRetry(t *testing.T) {
 	if first.Status != again.Status || len(first.Confirmed) != len(again.Confirmed) {
 		t.Fatalf("retry result differs: %+v vs %+v", first, again)
 	}
+
+	// A second, distinct operator completes dual confirmation and advances the
+	// task to blind_splitting. The frontend then retries sampler A's original
+	// request with the same operation id and content after a network blip.
+	if _, fault := svc.SamplingConfirm(context.Background(), id, samplingReq("op-b", catalog.FixedSamplerB, "BATCH-2026-001")); fault != nil {
+		t.Fatal(fault)
+	}
+	advanced, fault := svc.GetSnapshot(context.Background(), id)
+	if fault != nil {
+		t.Fatal(fault)
+	}
+	if advanced.Task.Status != inspection.StatusBlindSplitting {
+		t.Fatalf("status = %s, want blind_splitting after dual confirmation", advanced.Task.Status)
+	}
+	// The retry of an already-applied confirmation must replay its result even
+	// though the task has since left pending_sampling; it must not report
+	// illegal_transition.
+	retry, fault := svc.SamplingConfirm(context.Background(), id, samplingReq("op-a", catalog.FixedSamplerA, "BATCH-2026-001"))
+	if fault != nil {
+		t.Fatalf("idempotent retry after status advanced failed: %v", fault)
+	}
+	if retry.Status != inspection.StatusBlindSplitting || !retry.Complete {
+		t.Fatalf("retry after advance = %+v, want blind_splitting complete", retry)
+	}
 }
 
 func TestSamplingConfirmContentConflict(t *testing.T) {
