@@ -56,7 +56,6 @@ func (s *Service) CreateTask(ctx context.Context, req CreateTaskRequest) (*Creat
 		return nil, err
 	}
 
-	ctx = context.Background()
 	now := s.clock.Now()
 	task := inspection.Task{
 		ID:            req.TaskID,
