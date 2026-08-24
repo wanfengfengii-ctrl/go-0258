@@ -61,9 +61,11 @@ func (s *Service) AcquireOccupancy(ctx context.Context, id inspection.TaskID, re
 
 		for i := range req.Occupancies {
 			o := req.Occupancies[i]
-			if o.TaskID == "" {
-				o.TaskID = string(task.ID)
-			}
+			// The task in the URL path is the sole authority for occupancy
+			// ownership; never let a taskId supplied in the request body
+			// rewrite it, or a caller could lease resources against another
+			// task.
+			o.TaskID = string(task.ID)
 			o.Generation = int64(task.Generation)
 			if err := tx.AcquireOccupancy(ctx, o); err != nil {
 				switch err {
