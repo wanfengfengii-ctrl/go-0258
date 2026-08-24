@@ -95,11 +95,15 @@ func (s *Service) SubmitReading(ctx context.Context, id inspection.TaskID, req R
 		}
 		pass := calcPass(calc, req.Type, fp)
 		if pass.Err != nil {
+			// A genuine arithmetic failure (overflow, scale, division by zero)
+			// must never produce evidence; reject without writing.
 			return NewFault(CodeArithmeticFailure, pass.Err.Error())
 		}
-		if !pass.Pass {
-			return NewFault(CodeArithmeticFailure, "reading outside threshold")
-		}
+		// A well-formed reading that simply falls outside its threshold is a
+		// valid measurement: persist it as immutable evidence so the report
+		// carries the failing reading and the final arbiter can route it
+		// (e.g. an antibiotic suspect-positive to quarantine). Only true
+		// arithmetic failures are rejected above; threshold breaches are not.
 
 		rec := evidence.EvidenceRecord{
 			TaskID: string(task.ID), BlindCode: req.BlindCode, Compartment: req.Compartment,
