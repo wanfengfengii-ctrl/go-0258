@@ -30,7 +30,11 @@ func (s *sqliteTx) PutBlindSample(ctx context.Context, sample blindcode.BlindSam
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil
+			// The (tank_batch, compartment) primary key and the blind_code
+			// unique index both reject reuse: a second task splitting the
+			// same batch/compartment, or a duplicated blind code, must surface
+			// as ErrConflict so BlindSplit rejects it instead of advancing.
+			return ErrConflict
 		}
 		return err
 	}
