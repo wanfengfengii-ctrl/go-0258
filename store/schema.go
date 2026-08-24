@@ -143,6 +143,6 @@ CREATE TABLE IF NOT EXISTS final_decisions (
     final_type   TEXT NOT NULL,
     credential   TEXT NOT NULL,
     logical_time INTEGER NOT NULL,
-    UNIQUE (final_type)
+    UNIQUE (credential)
 );
 `
