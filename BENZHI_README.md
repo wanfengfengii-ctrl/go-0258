@@ -1,6 +1,6 @@
-# dairygate-raw-milk-tank-intake-inspection
+基于 Go 实现的生鲜乳罐批入厂检验 Web 项目，一款前后端应用，完成采样锁定、冷链核验、理化检测与入厂裁定。
 
-本 Git 项目来自模型完成任务后的 workspace，不包含嵌套 .git 记录或本地构建产物。
+# dairygate-raw-milk-tank-intake-inspection
 
 ## 本地构建与测试
 
