@@ -15,6 +15,7 @@ import (
 
 func TestModel_ReadingsRequireCurrentGenerationBlindCodeAndFullStageCoverage(t *testing.T) {
 	ctx := context.Background()
+	const codeBlindUnknown = "blind_unknown"
 	cases := []struct {
 		name string
 		run  func(t *testing.T, ctx context.Context, svc *Service, id inspection.TaskID)
@@ -29,8 +30,8 @@ func TestModel_ReadingsRequireCurrentGenerationBlindCodeAndFullStageCoverage(t *
 					BlindCode:   "BCODE-NOT-MAPPED",
 					Value:       "20.0",
 				})
-				if fault == nil || fault.Code != CodeBlindUnknown {
-					t.Fatalf("fault = %v, want %s", fault, CodeBlindUnknown)
+				if fault == nil || fault.Code != codeBlindUnknown {
+					t.Fatalf("fault = %v, want %s", fault, codeBlindUnknown)
 				}
 				modelRequireStatus(t, ctx, svc, id, inspection.StatusAntibioticReading)
 				modelRequireEvidenceCount(t, ctx, svc, id, 0)
