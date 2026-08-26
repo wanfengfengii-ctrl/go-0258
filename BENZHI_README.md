@@ -1,3 +1,4 @@
+基于 Go 实现的原奶罐车进厂检验 Web 项目，一款后端服务，处理检验建档、仪器读数与放行状态管理。
 # dairygate-raw-milk-tank-intake-inspection
 
 本 Git 项目来自模型完成任务后的 workspace，不包含嵌套 .git 记录或本地构建产物。
